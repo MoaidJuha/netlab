@@ -1,0 +1,95 @@
+repository: https://github.com/MoaidJuha/netlab
+
+answers:
+  planes:
+    question: "Where are the data, control and management planes in your network?"
+    answer: |
+      The data plane is the three Linux bridges s1, s2 and s3. They forward every
+      frame themselves, using the MAC table each one learned on its own. My
+      evidence/macs.txt shows s1's table with h1 on port 1 and h2 on port 2, and
+      every other host's MAC on port 3, the trunk towards s2.
+
+      There is no control plane in the usual sense, and no controller at all:
+      build_topo.py builds with controller=None. Nothing computes paths for the
+      bridges. Each bridge decides locally, which is why the network still works
+      when a link is unplugged.
+
+      The management plane is everything I did from outside: the Mininet CLI
+      commands, the checks in build_topo.py, and make_page.py generating this page
+      from the same file.
+  learning:
+    question: "How did your switches learn which port leads to each host? Use your MAC table evidence."
+    answer: |
+      Nobody configured the bridges. Each one reads the source MAC address of every
+      frame that arrives, and writes that MAC against the port it came in on. If it
+      has not seen the destination before it floods the frame out of every port,
+      and the reply teaches it the way back.
+
+      In evidence/macs.txt, s1 learned h1's MAC on port 1 and h2's on port 2, the
+      two hosts plugged into it directly. h3 to h6 are on port 3, because that is
+      the trunk towards s2 and every frame from those hosts arrived that way. Those
+      rows are marked is local? no, which means they were learned from traffic.
+  kind:
+    question: "Which of the four kinds of programmability is this assignment? Why isn't it any of the other three?"
+    answer: |
+      It is (d) automated configuration management, closest match. The network is kept
+      as data in a source of truth, and scripts read that data, check it, build the
+      network from it and produce the documentation from it. Change the data and the
+      network and the page both change.
+
+      It is not (a) a programmable data plane: I never changed how a packet is
+      processed, the bridges still only match on MAC addresses. It is not (b) an
+      externalised control plane: there is no controller and no device follows
+      instructions from outside, the bridges decide for themselves. It is not (c)
+      programmatic device interfaces either: I never spoke NETCONF or RESTCONF to a
+      device, I generated a description and built it.
+  two_am:
+    question: "Week 1's 2 a.m. change on 40 switches: what would be different if those switches were described like your network?"
+    answer: |
+      In Week 1 the change was typed device by device, so it cost an evening and
+      every mistake was a different mistake. With the network described as data,
+      the change becomes one edit to one file, checked once and then applied
+      everywhere, the same way check() refuses bad data before anything is built.
+
+      Keeping that file in Git is the other half. The change is reviewable as a
+      diff before it is applied, every device ends up identical instead of drifting,
+      and if it goes wrong there is a named version to roll back to instead of
+      guessing which switch was half-changed.
+  model:
+    question: "What's the difference between your network's data model and its serialisation? Use YAML and JSON as the example."
+    answer: |
+      The data model is the structure of the information: a list of switches, a list
+      of hosts each with a name and an IPv4 and an IPv6 address, and a list of links
+      pairing two devices. The serialisation is only how that structure is written
+      down as text.
+
+      topology.yaml and topology.json are the same model in two serialisations.
+      Building from either gives an identical network, which is the point: the tools
+      depend on the model, not on the punctuation. The JSON version lost the YAML
+      comments, because JSON has no comment syntax, and comments were never part of
+      the model.
+  check:
+    question: "Why is it better to catch bad data in check() than with pingall? What did IPv6 notice about a duplicate address that IPv4 didn't?"
+    answer: |
+      Because a broken description still builds, and the network then looks almost
+      healthy. When I gave two hosts the same address in Week 2 the build succeeded
+      and pingall reported one failure out of twelve, which host answered depending
+      on which one replied to ARP first. That is an intermittent fault that wastes an
+      afternoon. check() stops it before a single interface exists, and prints why.
+
+      IPv6 noticed what IPv4 could not. Before an IPv6 host uses a new address it asks
+      the network whether anyone already has it, and marks its own copy dadfailed and
+      stops using it. My evidence/dad.txt shows exactly that, next to an IPv4 address
+      accepted as a secondary address without a word of complaint.
+  git:
+    question: "What does your Git history give you that copying files into folders named topology-v2-final wouldn't?"
+    answer: |
+      A record of what changed, when, and in which commit, plus the ability to read
+      it before it is applied and to go back to any earlier version. Folders full of
+      copies give me the versions but not the reasons, and no way to see which lines
+      actually moved.
+
+      It also made the work itself easier to follow: the history goes from the first
+      three-host network, to a check that catches duplicate addresses, to my own
+      three-switch design, to the evidence and the page. Each commit is one step I
+      can explain.
