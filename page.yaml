@@ -11,8 +11,10 @@ answers:
 
       There is no control plane in the usual sense, and no controller at all:
       build_topo.py builds with controller=None. Nothing computes paths for the
-      bridges. Each bridge decides locally, which is why the network still works
-      when a link is unplugged.
+      bridges. Each bridge learns and forwards entirely on its own, and that is
+      also the weakness: the three switches are joined in a chain, so losing a
+      trunk link splits the network, while losing one host link only affects
+      that host.
 
       The management plane is everything I did from outside: the Mininet CLI
       commands, the checks in build_topo.py, and make_page.py generating this page

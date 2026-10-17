@@ -110,8 +110,10 @@ frame themselves, using the MAC table each one learned on its own. My
 evidence/macs.txt shows s1&#x27;s table with h1 on port 1 and h2 on port 2, and
 every other host&#x27;s MAC on port 3, the trunk towards s2.</p><p>There is no control plane in the usual sense, and no controller at all:
 build_topo.py builds with controller=None. Nothing computes paths for the
-bridges. Each bridge decides locally, which is why the network still works
-when a link is unplugged.</p><p>The management plane is everything I did from outside: the Mininet CLI
+bridges. Each bridge learns and forwards entirely on its own, and that is
+also the weakness: the three switches are joined in a chain, so losing a
+trunk link splits the network, while losing one host link only affects
+that host.</p><p>The management plane is everything I did from outside: the Mininet CLI
 commands, the checks in build_topo.py, and make_page.py generating this page
 from the same file.</p></section>
 <section id="answer-learning"><h3>How did your switches learn which port leads to each host? Use your MAC table evidence.</h3><p>Nobody configured the bridges. Each one reads the source MAC address of every
