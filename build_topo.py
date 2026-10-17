@@ -54,7 +54,8 @@ def check_mine(spec):
 def check(spec):
     """Return a list of problems in the description (an empty list means it looks fine).
 
-    Week 2 task: report any IP address that is used by more than one host.
+    Week 2 task: report any IP address used by more than one host, and any link
+    that names a device which doesn't exist.
     """
     problems = []
     seen = {}
@@ -67,7 +68,14 @@ def check(spec):
                 problems.append(f"{host['name']} and {seen[address]} both use {address}")
             else:
                 seen[address] = host["name"]
+
+    known = set(spec["switches"]) | {host["name"] for host in spec["hosts"]}
+    for a, b in spec["links"]:
+        for node in (a, b):
+            if node not in known:
+                problems.append(f"link {a} - {b} names {node}, which doesn't exist")
     return problems
+
 
 def build(spec):
     """Turn the description into a Mininet network: switches, then hosts, then links."""

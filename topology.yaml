@@ -3,6 +3,7 @@ student_id_last4: "0050"
 switches:
   - s1
   - s2
+  - s3
 
 hosts:
   - name: h1
@@ -17,10 +18,19 @@ hosts:
   - name: h4
     ip: 10.50.0.4/24
     ipv6: fd00:0050::4/64
+  - name: h5
+    ip: 10.50.0.5/24
+    ipv6: fd00:0050::5/64
+  - name: h6
+    ip: 10.50.0.6/24
+    ipv6: fd00:0050::6/64
 
 links:
   - [h1, s1]
   - [h2, s1]
-  - [h3, s1]
+  - [h3, s2]
   - [h4, s2]
+  - [h5, s3]
+  - [h6, s3]
   - [s1, s2]
+  - [s2, s3]
