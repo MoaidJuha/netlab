@@ -65,13 +65,26 @@ def links_section(spec):
 
 def mermaid_diagram(spec):
     """Return Mermaid text that draws the network, built from spec["links"]."""
-    lines = ["graph LR"]
-    for host in spec["hosts"]:
-        name = host["name"]
-        lines.append(f'  {name}["{name}<br>{host["ip"].split("/")[0]}"]')
-    for switch in spec["switches"]:
-        lines.append(f'  {switch}{{"{switch}"}}')
+    switches = spec["switches"]
+    ipv4 = {h["name"]: h["ip"].split("/")[0] for h in spec["hosts"]}
+    attached = {s: [] for s in switches}
+    trunks = []
     for a, b in spec["links"]:
+        if a in switches and b in switches:
+            trunks.append((a, b))
+        else:
+            node, switch = (a, b) if b in switches else (b, a)
+            attached[switch].append(node)
+    lines = ["graph LR"]
+    for switch in switches:
+        lines.append(f'  subgraph g_{switch}["{switch}"]')
+        lines.append(f'    {switch}{{"{switch}"}}')
+        for node in attached[switch]:
+            lines.append(f'    {node}["{node}<br>{ipv4.get(node, "")}"]')
+        for node in attached[switch]:
+            lines.append(f"    {switch} --- {node}")
+        lines.append("  end")
+    for a, b in trunks:
         lines.append(f"  {a} --- {b}")
     return chr(10).join(lines)
 
