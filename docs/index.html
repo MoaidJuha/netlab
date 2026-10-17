@@ -30,22 +30,22 @@ The same file builds this network in Mininet and generates this page.</p>
     s1{&quot;s1&quot;}
     h1[&quot;h1&lt;br&gt;10.50.0.1&quot;]
     h2[&quot;h2&lt;br&gt;10.50.0.2&quot;]
-    h1 --- s1
-    h2 --- s1
+    s1 --- h1
+    s1 --- h2
   end
   subgraph g_s2[&quot;s2&quot;]
     s2{&quot;s2&quot;}
     h3[&quot;h3&lt;br&gt;10.50.0.3&quot;]
     h4[&quot;h4&lt;br&gt;10.50.0.4&quot;]
-    h3 --- s2
-    h4 --- s2
+    s2 --- h3
+    s2 --- h4
   end
   subgraph g_s3[&quot;s3&quot;]
     s3{&quot;s3&quot;}
     h5[&quot;h5&lt;br&gt;10.50.0.5&quot;]
     h6[&quot;h6&lt;br&gt;10.50.0.6&quot;]
-    h5 --- s3
-    h6 --- s3
+    s3 --- h5
+    s3 --- h6
   end
   s1 --- s2
   s2 --- s3</pre>
