@@ -1,4 +1,4 @@
-# netlab — a network described as data
+# wic2005-w02 — a network described as data
 
 WIC2005 Programmable Networks, Week 2. The network is described once, as data,
 and that one description produces two outputs: a running Mininet network, and
