@@ -1,19 +1,92 @@
-# page3.yaml: the words on your Week 3 page. make_page3.py puts each answer under its question.
-# A few sentences each, in your own words, about YOUR network and YOUR evidence.
-# Leave a blank line between paragraphs. Never put your name or full student ID here.
-
-repository: https://github.com/YOUR-USERNAME/YOUR-REPOSITORY
+repository: https://github.com/MoaidJuha/netlab
 
 answers:
   design:
     question: "Describe your design: why these routers, LANs and links, and how you chose the addresses."
-    answer: ""
+    answer: |
+      My network is a ring of four routers, r1 to r4, with one LAN each: h1 on
+      r1, h2 on r2, h3 on r3 and h4 on r4. The ring is the point. Every router
+      has two neighbours, so any single router-to-router link can fail and the
+      other way round the ring is still physically there. That is the redundancy
+      the brief asks for; whether the routes can use it is a separate question,
+      and with static routes the answer is usually no.
+
+      The address plan is grouped in pairs to make summarisation possible. h1 and
+      h2 sit inside 10.50.0.0/22 (10.50.1.0/24 and 10.50.2.0/24). h3 and h4 sit
+      inside 10.50.32.0/20 (10.50.32.0/24 and 10.50.33.0/24). Router-to-router
+      links are named after the pair they join: 10.50.12.0/30 for r1-r2,
+      10.50.23.0/30 for r2-r3, 10.50.34.0/30 for r3-r4, and 10.50.41.0/30 for
+      r4-r1. On each link the first router named is .1 and the second is .2, so on
+      the r4-r1 link r4 is .1 and r1 is .2 - the opposite of every other link.
+      That is why r4's summary route points at 10.50.41.2 and not .1. Getting
+      that backwards cost me the first build: it reported that r4's next hop was
+      not on any network r4 is connected to, which is the check doing its job.
   summary:
     question: "Which route summarises several LANs? Which networks does it cover, why is it correct, and what else would it attract if you added a network inside its range?"
-    answer: ""
+    answer: |
+      There are two, one for each pair of LANs. On r1 and r2, 10.50.32.0/20
+      covers h3's LAN (10.50.32.0/24) and h4's LAN (10.50.33.0/24). On r3 and r4,
+      10.50.0.0/22 covers h1's LAN (10.50.1.0/24) and h2's LAN (10.50.2.0/24).
+      Each covers two of the four LANs, not all of them.
+
+      They are correct because each range contains only the LANs it is meant to
+      cover and none of the other two. 10.50.32.0/20 spans 10.50.32.0 through
+      10.50.47.255, which does not touch .1 or .2. 10.50.0.0/22 spans 10.50.0.0
+      through 10.50.3.255, which does not touch .32 or .33. The router's lookup
+      confirms it: on r1 both 10.50.32.10 and 10.50.33.10 go out via the same
+      next hop, 10.50.12.2, so one route is answering for two networks.
+
+      The cost is that a summary is too broad. If I later added a LAN inside
+      10.50.32.0/20 - say 10.50.34.0/24 on a new router between r3 and r4 - r1
+      and r2 would already have a route for it via the /20, sending that traffic
+      towards r2 before anything checked whether the LAN is really that way. It
+      might still work if the rest of the network is right, but the summary has
+      quietly made the route table less honest about where that network lives.
+      That is why real networks group LANs by region before they summarise:
+      summarise only what shares a topology, not just what shares a prefix.
   failure:
     question: "When you took a link down, what happened, and why couldn't your routes recover even though another path existed? What would have recovered?"
-    answer: ""
+    answer: |
+      I took the r1-r4 link down and traced h1 to h4. The trace reached r1 and
+      r2 and then stopped. The forward path was not actually broken: h1 still
+      goes r1, r2, r3, r4, h4, because r1's route to h4 is the summary
+      10.50.32.0/20 via 10.50.12.2 - r2, not r4. What broke was the way back.
+
+      r4's only route to h1 is the summary 10.50.0.0/22 via 10.50.41.2, and
+      10.50.41.2 is r1's end of the link I had just taken down. r4 has no
+      alternative, so replies never leave r4. The router still believes the route
+      is usable: r1 ip route get 10.50.33.10 returns "via 10.50.12.2 dev r1-eth1"
+      as if nothing happened. Static routes are installed once and never
+      recomputed, so a link failure only breaks the routes that named that link,
+      not the ones that now need to know about it.
+
+      A routing protocol would recover: OSPF on r4 would stop hearing from r1 on
+      that link, recompute from what it still hears, and install 10.50.0.0/22 via
+      r2 instead. Without one, r4 would need a second static route for the same
+      network via 10.50.34.2 with a higher metric, which is the manual version of
+      the same idea - a backup that takes over when the primary's link is gone.
   control_plane:
     question: "In your network, what was the control plane? Who worked out the routes, and what does that mean for a network of 40 routers?"
-    answer: ""
+    answer: |
+      I was the control plane. Every route in network.yaml was worked out by me
+      and typed as data: eight routes over four routers, each one chosen to send
+      traffic the right way around the ring and to line up with the summaries.
+      Nothing routed on its own. Until I added the first route, h1 could not
+      reach h2 even though h1 and h2 are two hops apart.
+
+      That is the Week 1 problem. One wrong next hop becomes a
+      black hole; one wrong summary becomes a loop that swallows traffic quietly.
+      check_paths() catches both before anything is built, it follows every
+      pair of hosts through lookup() the way the routers would, and reports the
+      first router with no route or the first router it visits twice. On loop.yaml
+      it names the loop r1, r2, r1; on missing.yaml it names r2 as the router
+      with no route to 10.50.1.10.
+
+      But it cannot invent an address plan, or know that a summary was the wrong
+      choice for this topology. At 40 routers it does not matter how good the
+      check is - the authoring is the bottleneck. The right control plane for 40
+      routers is not more typed routes; it is either a routing protocol that
+      discovers the topology and computes paths (OSPF or IS-IS), or a controller
+      that holds the whole topology and installs routes per router. Both move the
+      decision from my fingertips into software that can be reviewed, versioned
+      and tested, which is exactly what Weeks 2 and 3 are building towards.

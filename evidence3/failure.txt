@@ -1,0 +1,8 @@
+traceroute to 10.50.33.10 (10.50.33.10), 5 hops max, 60 byte packets
+ 1  10.50.1.1  0.046 ms
+ 2  10.50.12.2  0.023 ms
+ 3  *
+ 4  *
+ 5  *
+10.50.33.10 via 10.50.12.2 dev r1-eth1 src 10.50.12.1 uid 0 
+    cache 

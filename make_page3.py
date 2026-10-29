@@ -52,20 +52,19 @@ def links_section(spec):
 
 
 def routing_tables_section(spec):
-    """TODO (assignment): return HTML showing each router's routing table, as the router sees it.
-
-    For each router in spec["routers"], list:
-      - its directly connected networks: plan(spec)[router] gives its interfaces;
-        each one's .network is a connected network
-      - its static routes: spec["routes"].get(router), each with "to" and "via"
-    sorted longest prefix first (the order in which longest-prefix match prefers them).
-    Show each entry's destination and where it goes ("directly connected", or the next hop).
-    For example, one table per router:
-        <h3>r1</h3><table><tr><th>Destination</th><th>Next hop</th></tr>
-        <tr><td>10.7.12.0/30</td><td>directly connected</td></tr> ...</table>
-    Use esc() on every value.
-    """
-    return "<p>TODO: show each router's routing table.</p>"
+    """Return HTML showing each router's routing table, longest prefix first."""
+    out = []
+    for router in spec["routers"]:
+        entries = [(i.network, "directly connected") for i in plan(spec)[router]]
+        for r in (spec.get("routes") or {}).get(router) or []:
+            entries.append((ipaddress.ip_network(r["to"]), r["via"]))
+        entries.sort(key=lambda e: -e[0].prefixlen)
+        rows = "".join(f"<tr><td><code>{esc(n)}</code></td><td>{esc(v)}</td></tr>" for n, v in entries)
+        out.append(
+            f"<h3>{esc(router)}</h3><table><thead><tr><th>Destination</th><th>Next hop</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>"
+        )
+    return chr(10).join(out)
 
 
 def mermaid_diagram(spec):
