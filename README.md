@@ -43,3 +43,11 @@ A line-by-line record of what changed, when, and in which commit — plus the
 ability to review it before it is applied and roll back to any earlier version.
 A folder of files named `topology-v2-final` is just copies: no authorship, no
 reason, no history, and no way to see exactly which lines moved.
+
+## AI use
+
+Level 3 (Open) — assisted in understanding concepts and commands
+
+## AI use
+
+Level 3 (Open) - assisted in understanding concepts and commands. But have  manually written and implemented everything)
