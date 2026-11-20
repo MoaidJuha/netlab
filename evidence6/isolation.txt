@@ -1,0 +1,44 @@
+Isolation: two tenants share the address 10.50.50.11, each has its own VNI.
+
+Tenant alpha (VNI 1000) uses 02:00:03:e8:.. on 10.50.50.11
+Tenant beta  (VNI 2000) uses 02:00:07:d0:.. on 10.50.50.11
+
+a1 pings alpha's 10.50.50.11 — its ARP shows 03:e8 (alpha's MAC). b2 (beta's
+VM with the SAME IP) captures nothing: alpha's frames never cross into beta's
+VNI. b1 then pings beta's 10.50.50.11 and its ARP shows 07:d0 (beta's MAC):
+same address, different MAC, different tenant. VXLAN's VNI keeps them apart.
+
+====================
+
+PING 10.50.50.11 (10.50.50.11) 56(84) bytes of data.
+64 bytes from 10.50.50.11: icmp_seq=1 ttl=64 time=0.116 ms
+64 bytes from 10.50.50.11: icmp_seq=2 ttl=64 time=0.160 ms
+64 bytes from 10.50.50.11: icmp_seq=3 ttl=64 time=0.163 ms
+
+--- 10.50.50.11 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2064ms
+rtt min/avg/max/mdev = 0.116/0.146/0.163/0.021 ms
+10.50.50.11 dev a1-eth0 lladdr 02:00:03:e8:00:0b DELAY 
+== b2 capture during a1 ping (alpha traffic: expect 0) ==
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on b2-eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel
+PING 10.50.50.11 (10.50.50.11) 56(84) bytes of data.
+64 bytes from 10.50.50.11: icmp_seq=1 ttl=64 time=0.228 ms
+64 bytes from 10.50.50.11: icmp_seq=2 ttl=64 time=0.272 ms
+
+--- 10.50.50.11 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1052ms
+rtt min/avg/max/mdev = 0.228/0.250/0.272/0.022 ms
+10.50.50.11 dev b1-eth0 lladdr 02:00:07:d0:00:0b REACHABLE 
+10.50.50.11 dev b1-eth0 lladdr 02:00:07:d0:00:0b REACHABLE 
+== b2 capture during b1 ping (beta traffic: expect >0) ==
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on b2-eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel

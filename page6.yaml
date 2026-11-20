@@ -1,0 +1,194 @@
+repository: https://github.com/MoaidJuha/netlab
+
+answers:
+  design:
+    question: "Describe your design: hypervisors, tenants, VNIs and addresses. Which tenants overlap, and why did you place each VM where you did?"
+    answer: |
+      Three hypervisors, hv1, hv2 and hv3, sitting on one switch s1. The
+      hypervisors talk to each other on 10.50.0.x (hv1=.1, hv2=.2, hv3=.3).
+      Two tenants on top:
+
+      - alpha, VNI 1000 — a1 on hv1, a2 on hv2, a3 on hv3
+      - beta, VNI 2000 — b1 on hv1, b2 on hv3
+
+      Both tenants use the same network, 10.50.50.0/24. They're meant to
+      overlap: 10.50.50.10 is a1's address in alpha and b1's address in beta.
+      Without the VNI there's no way to tell them apart — that's the whole
+      point of the VNI. The VNI (1000 for alpha, 2000 for beta) is stuck on
+      every frame, and the underlay only sees UDP from one hypervisor's
+      address to another.
+
+      Why these placements. Alpha on all three hypervisors so a1 and a2 are
+      two hops apart — the ping from a1 to a2 has to cross hv1 -> hv2, and
+      the flood copy spills over to hv3, which is how the flood evidence
+      later shows hv3 learning a1's MAC. Beta only on hv1 and hv3, so hv1
+      and hv3 each host two tenants while hv2 hosts only alpha. That gives
+      the isolation test something to prove: alpha's traffic on hv2 should
+      never show up at beta's VM.
+
+      MTU: both tenants at 1450, underlay at 1500. 1450 + 50 bytes of VXLAN
+      overhead = 1500 exactly. That's a deliberate choice — see the MTU
+      answer for what happens with the wrong value.
+
+  isolation:
+    question: "Two of your VMs have the same IP address. Using your evidence, explain how a ping reaches the right one — and what would have to go wrong for one tenant to see another's traffic?"
+    answer: |
+      The address 10.50.50.11 belongs to two VMs at the same time: a2 on
+      alpha, b2 on beta. When a1 pings 10.50.50.11, it needs to know the MAC
+      of the destination. It sends an ARP "who has 10.50.50.11?", and that
+      broadcast goes out on alpha's bridge (br1000), through the vxlan1000
+      device, and across to every hypervisor that's running alpha.
+
+      In my evidence (isolation.txt), a1's neighbour table ends up saying
+      10.50.50.11 is at 02:00:03:e8:00:0b. Those middle bytes (03:e8) mean
+      VNI 1000 — a2. When b1 pings the same address, its neighbour table
+      says 10.50.50.11 is at 02:00:07:d0:00:0b. Those middle bytes (07:d0)
+      mean VNI 2000 — b2. Same IP, different MAC, different VM. Each
+      tenant sees only its own version of that address.
+
+      What could break it. Two things, and both are configuration bugs, not
+      protocol bugs.
+
+      First, a wrong VNI on one VTEP. If I gave b2's bridge VNI 1000 by
+      mistake, then b2 would join alpha's flood group and would start
+      answering a1's ARPs — as if it were alpha. Isolation is one number per
+      VTEP, and that number has to be right.
+
+      Second, a wrong bridge setup. If I attached b1 and a1 to the same
+      bridge on hv1, they'd both hear the same floods and one would see the
+      other's traffic. My evidence shows this didn't happen: the b2 capture
+      during a1's ping was 0 packets (alpha's frames never reached beta's
+      VM), and b1's ARP only ever learnt 07:d0, never 03:e8.
+
+  flood_learn:
+    question: "Using your evidence, explain what was flooded, to which hypervisors, and what each VTEP learned. With 50 hypervisors in one VNI, how many copies would one broadcast need — and how would EVPN change that?"
+    answer: |
+      On a fresh network with no traffic yet, each hypervisor's VTEP for VNI
+      1000 has only the flood entries my code put there: a permanent
+      00:00:00:00:00:00 entry pointing at each of the other hypervisors.
+      That's what the "before" part of flood.txt shows — just those
+      permanent entries and nothing else, because nobody has sent a packet.
+
+      Then a1 pinged a2. The ARP broadcast needed to find its way to a2, but
+      hv1 hadn't learnt a2's MAC yet — so it did what a switch always does
+      with an unknown destination: it copied the frame to every flood
+      destination. On hv1 that meant hv2 (where a2 actually is) and hv3
+      (where a3 is, but a3 isn't part of this conversation).
+
+      What each side learned after that:
+
+      - hv1's table (the "hv1 fdb after" section) shows a2's MAC
+        (02:00:03:e8:00:0b) appearing next to 10.50.0.2. When a2's reply
+        came back, hv1 read the source MAC and remembered which hypervisor
+        it came from. Next time, hv1 goes straight to hv2 instead of
+        flooding.
+      - hv3's table (the "hv3 fdb after" section) shows a1's MAC
+        (02:00:03:e8:00:0a) appearing next to 10.50.0.1. hv3 wasn't part
+        of the actual conversation — its a3 wasn't pinged — but it received
+        the flood copy anyway, and learned a1 from it. That's the proof
+        that flood-and-learn works: the only way hv3 knows a1 exists is
+        that it got a flooded copy of a1's traffic.
+
+      With 50 hypervisors in one VNI, that same broadcast would go out 50
+      times: once from the sender, and 49 copies to the 49 other VTEPs,
+      because there's no other way to reach a VTEP you haven't talked to.
+      That's a lot of traffic for one ARP, and it's why bigger deployments
+      use EVPN instead.
+
+      EVPN changes the mechanism entirely. Each VTEP tells the others in
+      BGP which MACs and IPs it serves for each VNI. So before a1 even
+      tries to ping a2, hv1 already knows a2's MAC is behind hv2 — no
+      broadcast, no flood, no learning from traffic. The ARP is answered
+      by the VTEP directly from its BGP-learned map. The cost moved from
+      the data plane (floods) to the control plane (BGP updates).
+
+  mtu:
+    question: "Compare your two MTU fixes using your measurements. Which would you choose for a data centre, what does each cost, and who has to change what?"
+    answer: |
+      Both fixes get rid of the black hole in the starting design, but they
+      pull different levers.
+
+      Fix A — lower every tenant's MTU to 1450, keep the underlay at 1500.
+      Then the VMs' own interfaces say "you can't send anything bigger than
+      1450", so nothing ever tries to push more than fits through the
+      tunnel. Measured: a 1422-byte ping works, a 1423-byte ping fails
+      with "message too long, mtu=1450" — and that error comes from the
+      VM itself, before any packet leaves the host. iperf3: 9.51 Gbps.
+
+      Fix B — leave tenants at 1500, raise the underlay to 9000 (jumbo
+      frames). Now there's plenty of room, so the MTU doesn't have to be
+      squeezed. Measured: a 1472-byte ping works, a 1473-byte ping fails
+      with "message too long, mtu=1500" — again, the VM saying no, before
+      any packet goes out. iperf3: 10.2 Gbps.
+
+      The cost of each.
+
+      Fix A costs 50 bytes of payload on every packet. On a full-size TCP
+      packet that's about 3% throughput lost. But nothing else changes —
+      every switch, every cable, every NIC stays at 1500, which is the
+      default everywhere.
+
+      Fix B costs jumbo-frame configuration on every device in the path.
+      Every switch port, every physical NIC, every VM's virtual NIC has to
+      be set to 9000, and they all have to handle a misconfigured peer
+      gracefully. Jumbo frames have their own problem: one 9000-byte packet
+      holds a port six times longer than a 1500-byte packet, which is bad
+      news for latency on a busy link. And one wrong NIC in the middle
+      brings back the exact same black hole we were trying to fix, just at
+      a bigger size.
+
+      Which I'd pick. Fix A, for a normal data centre. It's a small,
+      local change — one number per VM — and it works on whatever hardware
+      is already there. Fix B is only worth it when the network is already
+      jumbo (containers at scale, HPC), where the 50 bytes per packet is
+      real overhead on 40G+ links and the hardware is uniform anyway.
+
+      The numbers agree but don't tell the whole story. Fix B looked faster
+      (10.2 vs 9.5 Gbps) — about 7% — but that's because Fix B lets the
+      pipe carry 50 more bytes per packet. It's not free; it's paid for
+      in "you must configure 9000 everywhere or this breaks."
+
+  p4:
+    question: "If your hypervisors' VTEPs were P4 switches running the lecture's vtep.p4, what would have to fill the vtep_encap table, and how? What would replace flood-and-learn?"
+    answer: |
+      vtep.p4 declares a table called vtep_encap. It matches on the switch
+      port the packet came in on and the destination MAC of the inner frame.
+      Its action wraps the frame in VXLAN with the right VNI and the right
+      outer addresses.
+
+      Who fills it: the control plane, at run time. A P4 program declares
+      tables but doesn't put entries in them — that's the same split as the
+      Week 5 lab, where the P4 program declared ipv4_lpm and P4Runtime
+      wrote the entries. For a VTEP, "the control plane" could be an SDN
+      controller, or a Kubernetes network plugin like Calico or Cilium, or
+      a BGP speaker. What it definitely isn't: the switch itself. In the
+      v1model architecture (what vtep.p4 uses), the data plane reads
+      tables but can't add entries to them.
+
+      Each entry says: "if a frame arrives on this port, heading for this
+      MAC, then wrap it in VXLAN with this VNI, set these source and
+      destination VTEP addresses, and send it out this port." One entry
+      per (local VM MAC, its VNI, the remote VTEP serving it).
+
+      And the entries have to be kept fresh. A VM migrating between
+      hypervisors means a new entry. A tenant being created means new
+      entries. A VM going away means deleting one. That's exactly what an
+      EVPN route update does — "I now serve MAC X for VNI Y" — just
+      expressed as a table-write over P4Runtime.
+
+      What would replace flood-and-learn. The flood list itself — the
+      00:00:00:00:00:00 entries pointing at other hypervisors — gets
+      replaced by the same mechanism that fills vtep_encap: EVPN. Every
+      VTEP advertises its (MAC, IP) pairs in BGP, so every other VTEP
+      knows in advance which remote VTEP owns which MAC. No broadcast, no
+      flood list, no learning from traffic. ARP itself is handled locally
+      by the VTEP — it keeps a MAC-to-IP map from the same BGP routes and
+      answers directly, so a broadcast ARP never even crosses the
+      underlay.
+
+      In a way, EVPN merges two problems the lab solved separately. Which
+      MAC is behind which VTEP used to be solved by flood-and-learn in the
+      data plane. Which VTEP is where used to be solved by hand-typed
+      entries. EVPN answers both from BGP, before any traffic flows. It's
+      the same shift the Week 4 lecture describes for SDN: move the
+      decision out of every switch and into a shared control plane.

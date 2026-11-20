@@ -1,0 +1,48 @@
+Flood-and-learn: hv3's VTEP table learns a1's MAC from the flooded copy.
+
+Setup: tenant alpha (VNI 1000), VMs a1 (hv1), a2 (hv2), a3 (hv3). The ping is
+a1 -> a2, crossing hv1/hv2. hv3 hosts a3 but neither end of the ping, so
+anything hv3 learns about a1 must have arrived as a flooded copy
+(head-end replication: the 00:00:00:00:00:00 dst 10.50.0.x permanent entries
+below are the pre-programmed flood destinations).
+
+Key proof: at the bottom, "hv3 fdb after" contains "02:00:03:e8:00:0a dst
+10.50.0.1" — that's a1's MAC (VNI 1000 in the middle of the MAC) learned on
+hv3, which has no alpha VM. Only the flooded copy of a1's traffic could teach
+it. (The tcpdump 0-packet count is a capture-timing artefact; the FDB is the
+authoritative record.)
+
+====================
+
+76:ef:68:76:9b:a7 vlan 1 master br1000 permanent
+76:ef:68:76:9b:a7 master br1000 permanent
+00:00:00:00:00:00 dst 10.50.0.2 self permanent
+00:00:00:00:00:00 dst 10.50.0.3 self permanent
+PING 10.50.50.11 (10.50.50.11) 56(84) bytes of data.
+64 bytes from 10.50.50.11: icmp_seq=1 ttl=64 time=0.321 ms
+64 bytes from 10.50.50.11: icmp_seq=2 ttl=64 time=0.143 ms
+
+--- 10.50.50.11 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1026ms
+rtt min/avg/max/mdev = 0.143/0.232/0.321/0.089 ms
+== hv3 capture during a1->a2 ping ==
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on hv3-eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel
+== hv1 fdb after ==
+02:00:03:e8:00:0b master br1000 
+76:ef:68:76:9b:a7 vlan 1 master br1000 permanent
+76:ef:68:76:9b:a7 master br1000 permanent
+02:00:03:e8:00:0b dst 10.50.0.2 self 
+00:00:00:00:00:00 dst 10.50.0.2 self permanent
+00:00:00:00:00:00 dst 10.50.0.3 self permanent
+== hv3 fdb after ==
+02:00:03:e8:00:0a master br1000 
+52:00:2b:2e:84:da vlan 1 master br1000 permanent
+52:00:2b:2e:84:da master br1000 permanent
+02:00:03:e8:00:0a dst 10.50.0.1 self 
+00:00:00:00:00:00 dst 10.50.0.1 self permanent
+00:00:00:00:00:00 dst 10.50.0.2 self permanent
