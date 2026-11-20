@@ -1,0 +1,3 @@
+PROBLEM: tenant alpha: MTU 1500 + 50 bytes VXLAN = 1550 > underlay MTU 1500 (by 50 bytes)
+PROBLEM: tenant beta: MTU 1500 + 50 bytes VXLAN = 1550 > underlay MTU 1500 (by 50 bytes)
+Fix the design and try again: nothing was built.

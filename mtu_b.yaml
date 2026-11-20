@@ -1,0 +1,24 @@
+student_id_last4: "0050"
+
+underlay:
+  network: 10.50.0.0/24
+  mtu: 9000
+
+hypervisors: [hv1, hv2, hv3]
+
+tenants:
+  - name: alpha
+    vni: 1000
+    network: 10.50.50.0/24
+    mtu: 1500
+    vms:
+      - [a1, hv1]
+      - [a2, hv2]
+      - [a3, hv3]
+  - name: beta
+    vni: 2000
+    network: 10.50.50.0/24
+    mtu: 1500
+    vms:
+      - [b1, hv1]
+      - [b2, hv3]
